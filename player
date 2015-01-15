@@ -1,0 +1,350 @@
+/*
+C# & XNA code for a 2D side-scrolling platform game.
+Player.cs is the main character's source code.
+Physics of how the main character moves on screen is written here.
+The programs checks for a keyboard input and then moves the character based on new input and/or a pre-existing motion.
+*/
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+
+namespace EnergyDemo
+{
+    class Player
+    {
+        Texture2D mainCharacter;
+        Target enemy = new Target();
+
+        const int MAX_HEALTH = 5;//4
+        int health;//should start with 3 health
+        const int MAX_LIVES = 5;
+        int lives;//should start with 3 lives
+
+        //Rectangle destinationRectangle = new Rectangle(30, 350, 49, 49);
+        Rectangle sourceRectangle = new Rectangle(0, 0, 49, 49);
+
+        Vector2 position;
+        Vector2 center;//may not need
+        float rotation;//may not need
+
+        const int MAX_VELOCITY = 3;
+        Vector2 velocity = new Vector2(0, 0);
+        //const int MAX_ACCELERATION = ?; //will need in the future
+        Vector2 acceleration = new Vector2(0, 0);
+
+        public enum Action {standing, walking, jumping, homingAttack, rush}
+        Action currentState = Action.standing;
+
+        bool isAlive;
+        bool jumpKeyIsDown = false;
+        bool inAir = false;
+        
+        string moveDirection = "none";
+        string facing = "right";
+
+        int startY = 0;//ground position
+        int jumpCount = 0;//used keep track of how high the player can jump
+
+        KeyboardState keyState;
+
+        #region Constructor
+        //use as a future example
+        //public Player(Level level, Vector2 position)
+        //{
+        //    this.level = level;
+        //
+        //    LoadContent();
+        //
+        //    Reset(position);
+        //}
+
+        //public Player(Vector2 startPostion)
+        //{
+        //    this.mainCharacter = Content.Load<Texture2D>("MainCharacter\\Player");
+        //    this.health = 3;
+        //    this.lives = 3;
+        //    this.startPostion = startPostion;
+        //    currentState = Action.standing;
+        //    this.center = new Vector2(mainCharacter.Width / 2, mainCharacter.Height / 2);
+
+        //    LoadContent();
+        //}
+        #endregion
+
+        /// <summary>
+        /// Loads the player sprite sheet and sounds.
+        /// </summary>
+        public void LoadContent(ContentManager contentManager)
+        {
+            position = new Vector2(30, 350);
+            mainCharacter = contentManager.Load<Texture2D>("MainCharacter\\Player");
+        }
+
+        public void Update(GameTime gameTime)
+        {
+            KeyInput();
+            Move();
+        }
+
+        private void KeyInput()
+        {
+            keyState = Keyboard.GetState();
+
+            switch (currentState)
+            {
+                case Action.standing:
+                    inAir = false;
+                    if (keyState.IsKeyDown(Keys.D))
+                    {
+                        currentState = Action.walking;
+                        moveDirection = "right";
+                        facing = "right";
+                    }
+                    else if (keyState.IsKeyDown(Keys.A))
+                    {
+                        currentState = Action.walking;
+                        moveDirection = "left";
+                        facing = "left";
+                    }
+                    if (keyState.IsKeyDown(Keys.Space) && !jumpKeyIsDown && !inAir)
+                    {
+                        currentState = Action.jumping;
+                        jumpKeyIsDown = true;
+                    }
+                    if (keyState.IsKeyUp(Keys.Space))
+                    {
+                        jumpKeyIsDown = false;
+                    }
+                    break;
+                case Action.walking:
+                    inAir = false;
+                    if (keyState.IsKeyDown(Keys.D))
+                    {
+                        moveDirection = "right";
+                        facing = "right";
+                    }
+                    else if (keyState.IsKeyDown(Keys.A))
+                    {
+                        moveDirection = "left";
+                        facing = "left";
+                    }
+                    if (keyState.IsKeyUp(Keys.D) && keyState.IsKeyUp(Keys.A))
+                    {
+                        moveDirection = "none";
+                    }
+                    if (keyState.IsKeyDown(Keys.Space)&& !jumpKeyIsDown && !inAir)
+                    {
+                        currentState = Action.jumping;
+                        jumpKeyIsDown = true;
+                    }
+                    else if (keyState.IsKeyUp(Keys.Space))
+                    {
+                        jumpKeyIsDown = false;
+                    }
+                    break;
+                case Action.jumping:
+                    inAir = true;
+                    if (keyState.IsKeyDown(Keys.D))
+                    {
+                        moveDirection = "right";
+                        facing = "right";
+                    }
+                    else if (keyState.IsKeyDown(Keys.A))
+                    {
+                        moveDirection = "left";
+                        facing = "left";
+                    }
+                    if (keyState.IsKeyUp(Keys.D) && keyState.IsKeyUp(Keys.A))
+                    {
+                        moveDirection = "none";
+                    }
+                    if (keyState.IsKeyDown(Keys.Space))
+                    {
+                        jumpKeyIsDown = true;
+                    }
+                    else if (keyState.IsKeyUp(Keys.Space))
+                    {
+                        jumpKeyIsDown = false;
+                    }
+                    if (keyState.IsKeyDown(Keys.E))
+                    {
+                        currentState = Action.homingAttack;
+                    }
+                    break;
+                case Action.homingAttack:
+                    inAir = true;
+                    if (keyState.IsKeyDown(Keys.D))
+                    {
+                        facing = "right";
+                    }
+                    else if (keyState.IsKeyDown(Keys.A))
+                    {
+                        facing = "left";
+                    }
+                    if (keyState.IsKeyDown(Keys.Space))
+                    {
+                        jumpKeyIsDown = true;
+                    }
+                    else if (keyState.IsKeyUp(Keys.Space))
+                    {
+                        jumpKeyIsDown = false;
+                    }
+                    break;
+            }
+        }
+
+        //public void Move(GameTime gameTime)
+        public void Move()
+        {
+            //handles horizontal movement
+            switch (moveDirection)
+            {
+                case "none":
+                    if (currentState == Action.walking)
+                    {
+                        Equalize(2);
+                        position.X += velocity.X;
+                        if (velocity.X == 0)
+                            currentState = Action.standing;
+                    }
+                    else if (currentState == Action.jumping)
+                    {
+                        if (velocity.X < 0)
+                            velocity.X += .05f;
+                        else if (velocity.X > 0)
+                            velocity.X -= .05f;
+                        position.X += velocity.X;
+                    }
+                    break;
+                case "right":
+                    if (currentState == Action.walking)
+                    {
+                        if (velocity.X < MAX_VELOCITY && velocity.X >= 0)
+                            velocity.X += .1f;//.2f
+                        else if (velocity.X < 0)
+                            velocity.X += .15f;
+                        position.X += velocity.X;
+                    }
+                    if (currentState == Action.jumping)
+                    {
+                        if (velocity.X < MAX_VELOCITY + .1 && velocity.X >= 0)
+                            velocity.X += .06f;//cant move forward much in the air
+                        else if (velocity.X < 0)
+                            velocity.X += .08f;//.06
+                        position.X += velocity.X;
+                    }
+                    break;
+                case "left":
+                    if (currentState == Action.walking)
+                    {
+                        if (velocity.X > -MAX_VELOCITY && velocity.X <= 0)
+                            velocity.X -= .1f;//.2f
+                        else if (velocity.X > 0)
+                            velocity.X -= .15f;
+                        position.X += velocity.X;
+                    }
+                    if (currentState == Action.jumping)
+                    {
+                        if (velocity.X > -MAX_VELOCITY - .1 && velocity.X <= 0)
+                            velocity.X -= .06f;//cant move forward much in the air
+                        else if (velocity.X > 0)
+                            velocity.X -= .08f;//.06
+                        position.X += velocity.X;
+                    }
+                    break;
+            }
+
+            //handles vertical movement except homing attack
+            switch (currentState)
+            {
+                case Action.standing:
+                    {
+                        startY = (int)position.Y;
+                    }
+                    break;
+                case Action.walking:
+                    {
+                        startY = (int)position.Y;
+                    }
+                    break;
+                case Action.jumping:
+                    {
+                        CalculateVerticalAirMovement();
+                    }
+                    break;
+                case Action.homingAttack:
+                    {
+                        if (Math.Abs(position.X - enemy.getPositionX()) < 200)
+                        {
+                            position = enemy.returnPosition();
+                        }
+                        else
+                        {
+                            currentState = Action.jumping;
+                            inAir = true;
+                            CalculateVerticalAirMovement();
+                        }
+                    }
+                    break;
+            }
+        }
+
+        private void Equalize(int i)
+        {
+            for (int k = 0; k < i; k++)
+            {
+                if (velocity.X < 0f)
+                {
+                    velocity.X += .04f;
+                }
+                else if (velocity.X > 0f)
+                {
+                    velocity.X -= .04f;
+                }
+            }
+            if (Math.Abs(velocity.X) < 0.1f)
+            {
+                velocity.X = 0.0f;
+            }
+        }
+
+        private void CalculateVerticalAirMovement()
+        {
+            if (jumpCount == 0)
+            {
+                acceleration.Y = -11;//-11
+                velocity.Y = acceleration.Y;
+            }
+            else if (jumpCount > 0)
+            {
+                acceleration.Y += .6f;//.6
+                velocity.Y = acceleration.Y;
+            }
+            position.Y += velocity.Y;
+            jumpCount++;
+            if (position.Y >= startY)
+            {
+                position.Y = startY;
+                currentState = Action.walking;
+                inAir = false;
+                velocity.Y = 0f;
+                jumpCount = 0;
+            }
+        }
+
+        public void Draw(SpriteBatch spriteBatch)
+        {
+            if (facing == "right")
+                spriteBatch.Draw(mainCharacter, position, sourceRectangle, Color.White);
+            else
+                spriteBatch.Draw(mainCharacter,position,sourceRectangle,Color.White,0.0f,Vector2.Zero,1,SpriteEffects.FlipHorizontally,0);
+                //(mainCharacter, destinationRectangle, sourceRectangle, Color.White, 0.0f, Vector2.Zero, SpriteEffects.FlipHorizontally, 0);
+        }
+    }
+}
